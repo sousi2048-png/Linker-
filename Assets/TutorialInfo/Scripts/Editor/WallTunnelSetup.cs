@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using System;
+using System.Reflection;
 
 [InitializeOnLoad]
 public static class WallTunnelSetup
@@ -33,9 +35,9 @@ public static class WallTunnelSetup
 
         // 現在のシーン内のすべてのGameObjectを検索
 #if UNITY_2023_1_OR_NEWER
-        GameObject[] allObjects = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+        GameObject[] allObjects = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
 #else
-        GameObject[] allObjects = Object.FindObjectsOfType<GameObject>();
+        GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
 #endif
         
         int wallCount = 0;
@@ -117,10 +119,12 @@ public static class WallTunnelSetup
                 SetupBig(obj, wallMaterial);
                 bigCount++;
             }
-            // Gold Cupで始まるすべてのオブジェクトを対象（元のマテリアルを復元）
+            // Gold Cupで始まるすべてのオブジェクトを対象（元のマテリアルを復元 + ゲームクリア用の設定）
             else if (obj.name.StartsWith("Gold Cup"))
             {
+                Debug.Log($"WallTunnelSetup: Gold Cupを検出しました: {obj.name}");
                 RestoreGoldCupMaterial(obj);
+                SetupGoldCup(obj);
             }
         }
 
@@ -561,6 +565,136 @@ public static class WallTunnelSetup
         {
             Debug.LogWarning("Unlitシェーダーが見つかりませんでした。");
         }
+    }
+
+    /// <summary>
+    /// Gold Cupにゲームクリア用のTrigger Colliderとコンポーネントを設定
+    /// </summary>
+    static void SetupGoldCup(GameObject obj)
+    {
+        if (obj == null)
+        {
+            Debug.LogWarning("SetupGoldCup: objがnullです。");
+            return;
+        }
+
+        Debug.Log($"SetupGoldCup: {obj.name}を設定中...");
+
+        // Player検出用のTrigger Colliderを追加（子オブジェクトとして）
+        GameObject triggerObj = obj.transform.Find("TriggerCollider")?.gameObject;
+        if (triggerObj == null)
+        {
+            triggerObj = new GameObject("TriggerCollider");
+            triggerObj.transform.SetParent(obj.transform);
+            triggerObj.transform.localPosition = Vector3.zero;
+            triggerObj.transform.localRotation = Quaternion.identity;
+            triggerObj.transform.localScale = Vector3.one;
+            
+            // Prefabのインスタンスの場合は、Prefab接続を解除
+            if (PrefabUtility.IsPartOfPrefabInstance(obj))
+            {
+                PrefabUtility.UnpackPrefabInstance(obj, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            }
+            
+            Debug.Log($"SetupGoldCup: TriggerColliderを作成しました。");
+        }
+        else
+        {
+            Debug.Log($"SetupGoldCup: TriggerColliderは既に存在します。");
+        }
+
+        // Trigger Colliderを追加（少し大きめに設定）
+        Collider triggerCollider = triggerObj.GetComponent<Collider>();
+        if (triggerCollider == null)
+        {
+            BoxCollider triggerBox = triggerObj.AddComponent<BoxCollider>();
+            triggerBox.isTrigger = true;
+            
+            // RendererのBoundsを使用してサイズを設定
+            Renderer renderer = obj.GetComponentInChildren<Renderer>();
+            if (renderer != null)
+            {
+                Bounds bounds = renderer.bounds;
+                // ローカル座標に変換
+                Vector3 localSize = obj.transform.InverseTransformVector(bounds.size);
+                triggerBox.size = localSize * 1.5f; // 1.5倍に拡大して検出しやすくする
+                triggerBox.center = obj.transform.InverseTransformPoint(bounds.center);
+                Debug.Log($"SetupGoldCup: BoxColliderを追加しました。サイズ: {triggerBox.size}");
+            }
+            else
+            {
+                // Rendererがない場合はデフォルトサイズ
+                triggerBox.size = Vector3.one * 1.5f;
+                Debug.Log($"SetupGoldCup: Rendererが見つかりませんでした。デフォルトサイズを使用します。");
+            }
+        }
+        else
+        {
+            triggerCollider.isTrigger = true;
+            Debug.Log($"SetupGoldCup: Colliderは既に存在します。IsTriggerをtrueに設定しました。");
+        }
+
+        // GoldCupTriggerコンポーネントを追加（TriggerColliderにアタッチ）
+        // エディタスクリプトからランタイムスクリプトを参照するため、リフレクションを使用
+        Type goldCupTriggerType = FindTypeInAllAssemblies("GoldCupTrigger");
+        
+        if (goldCupTriggerType != null)
+        {
+            Component existingComponent = triggerObj.GetComponent(goldCupTriggerType);
+            if (existingComponent == null)
+            {
+                Component addedComponent = triggerObj.AddComponent(goldCupTriggerType);
+                if (addedComponent != null)
+                {
+                    Debug.Log($"SetupGoldCup: GoldCupTriggerコンポーネントを追加しました。");
+                    // シーンに変更をマーク
+                    if (!EditorApplication.isPlaying)
+                    {
+                        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"SetupGoldCup: GoldCupTriggerコンポーネントの追加に失敗しました。");
+                }
+            }
+            else
+            {
+                Debug.Log($"SetupGoldCup: GoldCupTriggerコンポーネントは既に存在します。");
+            }
+        }
+        else
+        {
+            Debug.LogError($"SetupGoldCup: GoldCupTrigger型が見つかりませんでした。GoldCupTrigger.csが正しくコンパイルされているか確認してください。");
+        }
+    }
+
+    /// <summary>
+    /// すべてのアセンブリから型を検索
+    /// </summary>
+    static Type FindTypeInAllAssemblies(string typeName)
+    {
+        // まず、Assembly-CSharpから検索
+        Type type = Type.GetType($"{typeName}, Assembly-CSharp");
+        if (type != null)
+        {
+            Debug.Log($"FindTypeInAllAssemblies: {typeName}をAssembly-CSharpで見つけました。");
+            return type;
+        }
+
+        // すべてのアセンブリを検索
+        foreach (Assembly assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+        {
+            type = assembly.GetType(typeName);
+            if (type != null)
+            {
+                Debug.Log($"FindTypeInAllAssemblies: {typeName}を{assembly.FullName}で見つけました。");
+                return type;
+            }
+        }
+
+        Debug.LogWarning($"FindTypeInAllAssemblies: {typeName}が見つかりませんでした。");
+        return null;
     }
 
     [MenuItem("Tools/Setup Wall and Tunnel")]

@@ -5,6 +5,7 @@ public class MenuManager : MonoBehaviour
     [Header("Menu Settings")]
     private GameObject menuPanel;
     private GameObject menuCanvas;
+    private GameObject menuWindow;
     private GameObject nodeContainer; // ノードを配置するコンテナ
     private bool isMenuOpen = false;
     private System.Collections.Generic.List<string> collectedItems = new System.Collections.Generic.List<string>(); // 収集したアイテムのリスト
@@ -129,8 +130,8 @@ public class MenuManager : MonoBehaviour
         UnityEngine.UI.GraphicRaycaster raycaster = menuCanvas.AddComponent<UnityEngine.UI.GraphicRaycaster>();
         raycaster.enabled = true;
 
-        // メニューパネルを作成（全画面の白いウィンドウ）
-        menuPanel = new GameObject("MenuPanel");
+        // 背景オーバーレイ（暗くしてメニューを見やすくする）
+        menuPanel = new GameObject("MenuOverlay");
         menuPanel.transform.SetParent(menuCanvas.transform, false);
 
         RectTransform panelRect = menuPanel.AddComponent<RectTransform>();
@@ -139,25 +140,166 @@ public class MenuManager : MonoBehaviour
         panelRect.sizeDelta = Vector2.zero;
         panelRect.anchoredPosition = Vector2.zero;
 
-        // 白い背景を追加
+        // 半透明の暗い背景を追加
         UnityEngine.UI.Image panelImage = menuPanel.AddComponent<UnityEngine.UI.Image>();
-        panelImage.color = Color.white;
+        panelImage.color = new Color(0f, 0f, 0f, 0.55f);
+
+        // メニューウィンドウ（中央）
+        menuWindow = new GameObject("MenuWindow");
+        menuWindow.transform.SetParent(menuPanel.transform, false);
+
+        RectTransform windowRect = menuWindow.AddComponent<RectTransform>();
+        windowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        windowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        windowRect.pivot = new Vector2(0.5f, 0.5f);
+        windowRect.sizeDelta = new Vector2(1400f, 860f);
+        windowRect.anchoredPosition = Vector2.zero;
+
+        UnityEngine.UI.Image windowImage = menuWindow.AddComponent<UnityEngine.UI.Image>();
+        windowImage.color = new Color(1f, 1f, 1f, 0.98f);
+
+        UnityEngine.UI.Outline windowOutline = menuWindow.AddComponent<UnityEngine.UI.Outline>();
+        windowOutline.effectColor = new Color(0f, 0f, 0f, 0.35f);
+        windowOutline.effectDistance = new Vector2(6f, -6f);
+
+        // 上部の説明エリア
+        CreateMenuHeader(menuWindow.transform);
 
         // ノードコンテナを作成（スクロール可能なエリア）
-        CreateNodeContainer();
+        CreateNodeContainer(menuWindow.transform);
     }
 
-    private void CreateNodeContainer()
+    private void CreateMenuHeader(Transform parent)
+    {
+        GameObject header = new GameObject("MenuHeader");
+        header.transform.SetParent(parent, false);
+
+        RectTransform headerRect = header.AddComponent<RectTransform>();
+        headerRect.anchorMin = new Vector2(0f, 1f);
+        headerRect.anchorMax = new Vector2(1f, 1f);
+        headerRect.pivot = new Vector2(0.5f, 1f);
+        headerRect.sizeDelta = new Vector2(0f, 210f);
+        headerRect.anchoredPosition = Vector2.zero;
+        headerRect.offsetMin = new Vector2(28f, headerRect.offsetMin.y);
+        headerRect.offsetMax = new Vector2(-28f, headerRect.offsetMax.y);
+
+        UnityEngine.UI.Image headerBg = header.AddComponent<UnityEngine.UI.Image>();
+        headerBg.color = new Color(0.96f, 0.97f, 1f, 1f);
+
+        // タイトル
+        CreateText(
+            parent: header.transform,
+            name: "Title",
+            textValue: "Menu",
+            fontSize: 34,
+            color: new Color(0.12f, 0.12f, 0.12f, 1f),
+            alignment: TextAnchor.UpperLeft,
+            anchoredTopLeft: new Vector2(18f, -14f),
+            size: new Vector2(0f, 48f),
+            stretchX: true
+        );
+
+        // 指示文（指定された文言をそのまま表示）
+        CreateText(
+            parent: header.transform,
+            name: "Instruction1",
+            textValue: "Touch Object and Get a Node",
+            fontSize: 24,
+            color: new Color(0.18f, 0.18f, 0.18f, 1f),
+            alignment: TextAnchor.UpperLeft,
+            anchoredTopLeft: new Vector2(18f, -70f),
+            size: new Vector2(0f, 34f),
+            stretchX: true
+        );
+        CreateText(
+            parent: header.transform,
+            name: "Instruction2",
+            textValue: "Drag and Drop a Node to Attach It",
+            fontSize: 24,
+            color: new Color(0.18f, 0.18f, 0.18f, 1f),
+            alignment: TextAnchor.UpperLeft,
+            anchoredTopLeft: new Vector2(18f, -108f),
+            size: new Vector2(0f, 34f),
+            stretchX: true
+        );
+        CreateText(
+            parent: header.transform,
+            name: "Instruction3",
+            textValue: "Double-Click to Break the Bond",
+            fontSize: 24,
+            color: new Color(0.18f, 0.18f, 0.18f, 1f),
+            alignment: TextAnchor.UpperLeft,
+            anchoredTopLeft: new Vector2(18f, -146f),
+            size: new Vector2(0f, 34f),
+            stretchX: true
+        );
+    }
+
+    private void CreateText(
+        Transform parent,
+        string name,
+        string textValue,
+        int fontSize,
+        Color color,
+        TextAnchor alignment,
+        Vector2 anchoredTopLeft,
+        Vector2 size,
+        bool stretchX
+    )
+    {
+        GameObject textObj = new GameObject(name);
+        textObj.transform.SetParent(parent, false);
+
+        RectTransform textRect = textObj.AddComponent<RectTransform>();
+        if (stretchX)
+        {
+            textRect.anchorMin = new Vector2(0f, 1f);
+            textRect.anchorMax = new Vector2(1f, 1f);
+        }
+        else
+        {
+            textRect.anchorMin = new Vector2(0f, 1f);
+            textRect.anchorMax = new Vector2(0f, 1f);
+        }
+        textRect.pivot = new Vector2(0f, 1f);
+        if (stretchX)
+        {
+            // X方向はオフセットで管理（anchoredPosition.xと混ぜない）
+            textRect.anchoredPosition = new Vector2(0f, anchoredTopLeft.y);
+            textRect.sizeDelta = new Vector2(0f, size.y);
+            textRect.offsetMin = new Vector2(anchoredTopLeft.x, textRect.offsetMin.y);
+            textRect.offsetMax = new Vector2(-18f, textRect.offsetMax.y);
+        }
+        else
+        {
+            textRect.anchoredPosition = anchoredTopLeft;
+            textRect.sizeDelta = size;
+        }
+
+        UnityEngine.UI.Text text = textObj.AddComponent<UnityEngine.UI.Text>();
+        text.text = textValue;
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.fontSize = fontSize;
+        text.color = color;
+        text.alignment = alignment;
+        text.fontStyle = FontStyle.Bold;
+        text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+
+    private void CreateNodeContainer(Transform parent)
     {
         // ノードコンテナを作成
         nodeContainer = new GameObject("NodeContainer");
-        nodeContainer.transform.SetParent(menuPanel.transform, false);
+        nodeContainer.transform.SetParent(parent, false);
 
         RectTransform containerRect = nodeContainer.AddComponent<RectTransform>();
-        containerRect.anchorMin = new Vector2(0.1f, 0.1f);
-        containerRect.anchorMax = new Vector2(0.9f, 0.9f);
+        containerRect.anchorMin = Vector2.zero;
+        containerRect.anchorMax = Vector2.one;
         containerRect.sizeDelta = Vector2.zero;
         containerRect.anchoredPosition = Vector2.zero;
+        containerRect.offsetMin = new Vector2(28f, 28f);
+        containerRect.offsetMax = new Vector2(-28f, -240f); // 上部ヘッダー分を空ける
 
         // スクロールビューを追加
         UnityEngine.UI.ScrollRect scrollRect = nodeContainer.AddComponent<UnityEngine.UI.ScrollRect>();
@@ -165,9 +307,24 @@ public class MenuManager : MonoBehaviour
         scrollRect.vertical = true;
         scrollRect.movementType = UnityEngine.UI.ScrollRect.MovementType.Elastic;
 
+        // Viewport（Mask）を作成
+        GameObject viewport = new GameObject("Viewport");
+        viewport.transform.SetParent(nodeContainer.transform, false);
+        RectTransform viewportRect = viewport.AddComponent<RectTransform>();
+        viewportRect.anchorMin = Vector2.zero;
+        viewportRect.anchorMax = Vector2.one;
+        viewportRect.sizeDelta = Vector2.zero;
+        viewportRect.anchoredPosition = Vector2.zero;
+
+        UnityEngine.UI.Image viewportImage = viewport.AddComponent<UnityEngine.UI.Image>();
+        viewportImage.color = new Color(1f, 1f, 1f, 0.02f);
+        UnityEngine.UI.Mask viewportMask = viewport.AddComponent<UnityEngine.UI.Mask>();
+        viewportMask.showMaskGraphic = false;
+        scrollRect.viewport = viewportRect;
+
         // コンテンツエリアを作成
         GameObject content = new GameObject("Content");
-        content.transform.SetParent(nodeContainer.transform, false);
+        content.transform.SetParent(viewport.transform, false);
         RectTransform contentRect = content.AddComponent<RectTransform>();
         contentRect.anchorMin = new Vector2(0f, 1f); // 上端にアンカー
         contentRect.anchorMax = new Vector2(1f, 1f); // 上端にアンカー
@@ -193,7 +350,7 @@ public class MenuManager : MonoBehaviour
 
         // 背景を追加（見やすくするため）
         UnityEngine.UI.Image containerImage = nodeContainer.AddComponent<UnityEngine.UI.Image>();
-        containerImage.color = new Color(0.9f, 0.9f, 0.9f, 0.5f);
+        containerImage.color = new Color(0.92f, 0.92f, 0.92f, 1f);
     }
 
     /// <summary>
@@ -496,6 +653,7 @@ public class MenuManager : MonoBehaviour
             Destroy(menuCanvas);
             menuCanvas = null;
             menuPanel = null;
+            menuWindow = null;
             nodeContainer = null;
         }
     }
